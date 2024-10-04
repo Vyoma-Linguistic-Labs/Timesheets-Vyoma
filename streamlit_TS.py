@@ -4,7 +4,7 @@
 """
 Created on Fri May 26 18:52:02 2023
 
-Converted to Streamlit app.
+Converted to Streamlit app on Fri, 4th Oct 2024.
 
 @author: shank
 """
@@ -22,8 +22,8 @@ from io import BytesIO
 api_key = st.secrets["auth"]
 team_id = st.secrets["team_id"]
 
-__version__ = "v2.1.0"
-__date__ = "5th July 2024"
+__version__ = "v3.0.0"
+__date__ = "5th October 2024"
 __auth__ = api_key
 
 # Dictionary mapping month names to numbers
@@ -346,14 +346,11 @@ def get_selected_dates(start_date, end_date, key, open_google_sheet):
     st.write(f"Processing Time: {time.time() - start_time_process} seconds")
 
     if open_google_sheet:
-        url1 = 'https://docs.google.com/spreadsheets/d/1XLDSTT5m952eiOXhiUtxldIIoEAfQgiVKv5XY2HFOBg/edit?usp=sharing'
+        url1 = 'https://docs.google.com/spreadsheets/d/1XLDSTT5m952eiOXhiUtxldIIoEAfQgiVKv5XY2HFOBg/edit?usp=sharing'        
         st.write(f"[Open Google Sheet for TS Submission Status]({url1})")
 
 def main():
-    st.set_page_config(page_title="Timesheet Generator", page_icon=":calendar:", layout="centered")
-
-    current_version = __version__  # Replace with your current version
-    # check_for_update(current_version)
+    st.set_page_config(page_title="Timesheet Generator", page_icon=":calendar:", layout="centered")    
 
     # Display Image
     image_url = "https://digitalsanskritguru.com/wp-content/uploads/2020/05/Vyoma_Logo_Blue_500x243.png"
