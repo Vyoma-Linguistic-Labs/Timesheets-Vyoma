@@ -365,12 +365,21 @@ def main():
     # Employee Key Entry
     key = st.text_input("Employee ID: (e.g., C047)")
 
-    # Date Selection
+    # Date Selection with Display in 'Day, dd Mon yyyy' Format after Selection
     col1, col2 = st.columns(2)
     with col1:
         start_date = st.date_input("Start Date", datetime.today() - timedelta(days=7))
+        # Format the selected start date
+        formatted_start_date = start_date.strftime('%a, %d %b %Y')
+        # Display the formatted start date just below the selection
+        st.write(f"Selected Start Date: {formatted_start_date}")
+
     with col2:
         end_date = st.date_input("End Date", datetime.today())
+        # Format the selected end date
+        formatted_end_date = end_date.strftime('%a, %d %b %Y')
+        # Display the formatted end date just below the selection
+        st.write(f"Selected End Date: {formatted_end_date}")
 
     # Create checkboxes
     open_google_sheet = st.checkbox("Open the Google sheet for TS Submission Status")
