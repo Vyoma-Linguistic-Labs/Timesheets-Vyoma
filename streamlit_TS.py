@@ -363,7 +363,7 @@ def main():
     st.title("Timesheet Generator")
 
     # Employee Key Entry
-    key = st.text_input("Employee ID: (e.g., C047)")
+    key = st.text_input("Employee ID: (e.g. E035 or C047)")
 
     # Date Selection with Display in 'Day, dd Mon yyyy' Format after Selection
     col1, col2 = st.columns(2)
