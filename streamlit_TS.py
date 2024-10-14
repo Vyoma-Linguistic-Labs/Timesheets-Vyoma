@@ -47,6 +47,10 @@ ist_timezone = pytz.timezone('Asia/Kolkata')
 # Exchange keys and values
 month_flipped = {value: key for key, value in month_dict.items()}
 
+# Check if value is string 'nan' or np.nan
+def is_nan(value):
+    return value == 'nan' or (isinstance(value, float) and np.isnan(value))
+
 def convert_milliseconds_to_hours_minutes(milliseconds):
     seconds = milliseconds / 1000
     minutes = seconds // 60
@@ -256,12 +260,13 @@ def get_selected_dates(start_date, end_date, key, open_google_sheet):
         # Extract the 'Task Name' column value for the current row
         task_name = row['Task Name']
         task_id = row['Task ID']
-        st.write([row[col] for col in project_columns])
-        if all(np.isnan(row[col]) for col in project_columns):  # All specified columns are NaN
+        
+        # Updated code to handle both 'nan' strings and np.nan values
+        if all(is_nan(row[col]) for col in project_columns):  # All specified columns are NaN
             rows_with_missing_data.append(task_name)
             row_id_with_missing_data.append(task_id)
-        st.write(row['Goal Type'])
-        if np.isnan(row['Goal Type']):  # Goal Type is NaN
+        
+        if is_nan(row['Goal Type']):  # Goal Type is NaN
             rows_missing_goal_type.append(task_name)
             row_id_missing_goal_type.append(task_id)
 
