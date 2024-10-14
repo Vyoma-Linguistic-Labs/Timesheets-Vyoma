@@ -257,11 +257,11 @@ def get_selected_dates(start_date, end_date, key, open_google_sheet):
         task_name = row['Task Name']
         task_id = row['Task ID']
         st.write([row[col] for col in project_columns])
-        if all(row[col] == 'nan' for col in project_columns):  # All specified columns are NaN
+        if all(np.isnan(row[col]) for col in project_columns):  # All specified columns are NaN
             rows_with_missing_data.append(task_name)
             row_id_with_missing_data.append(task_id)
         st.write(row['Goal Type'])
-        if row['Goal Type'] == 'nan':  # Goal Type is NaN
+        if np.isnan(row['Goal Type']):  # Goal Type is NaN
             rows_missing_goal_type.append(task_name)
             row_id_missing_goal_type.append(task_id)
 
