@@ -22,8 +22,8 @@ from io import BytesIO
 api_key = st.secrets["auth"]
 team_id = st.secrets["team_id"]
 
-__version__ = "v3.0.0"
-__date__ = "5th October 2024"
+__version__ = "v3.0.1"
+__date__ = "22nd November 2024"
 __auth__ = api_key
 
 # Dictionary mapping month names to numbers
@@ -38,6 +38,13 @@ columns_to_check = [
     "Management-Project", "Technology-Project", "Linguistic-Project",
     "MMedia-Project", "Project-CST", "Sales-Mktg-Project", "Project-ELA",
     "Proj-KidsPersona", "FinAcc-Project", "Website", "SFH-Admin-Project",
+    "Admin-Project", "Linguistic-Activity"
+]
+project_columns = [
+    "Proj-Common-Activity", "Proj-Outside-Office",
+    "Management-Project", "Technology-Project", "Linguistic-Project",
+    "MMedia-Project", "Project-CST", "Sales-Mktg-Project", "Project-ELA",
+    "Proj-KidsPersona", "FinAcc-Project", "SFH-Admin-Project",
     "Admin-Project", "Linguistic-Activity"
 ]
 
@@ -254,6 +261,9 @@ def get_selected_dates(start_date, end_date, key, open_google_sheet):
     row_id_with_missing_data = []
     rows_missing_goal_type = []
     row_id_missing_goal_type = []
+    # Add the new condition to check 'Product' and '-Proj' columns
+    tasks_with_missing_proj = []
+    task_ids_with_missing_proj = []
     project_columns = list(set(df_h.columns.tolist()).intersection(columns_to_check))
     # Iterate through rows in the DataFrame
     for index, row in df_h.iterrows():
@@ -269,9 +279,22 @@ def get_selected_dates(start_date, end_date, key, open_google_sheet):
         if is_nan(row['Goal Type']):  # Goal Type is NaN
             rows_missing_goal_type.append(task_name)
             row_id_missing_goal_type.append(task_id)
+            
+        # Check if 'Product' column has a value
+        if 'Project ID' in df_h.columns and not is_nan(row['Project ID']):            
+            # Check if any column ending with '-Proj' has a value
+            project_set = False
+            for col in project_columns:
+                if (col in project_columns) and not is_nan(row[col]):
+                    project_set = True
+                    break            
+            # If no '-Proj' column has a value, collect the task details
+            if not project_set:
+                tasks_with_missing_proj.append(row['Task Name'])
+                task_ids_with_missing_proj.append(row['Task ID']) 
 
     # Output the names of rows that do not fit the criterion
-    if rows_with_missing_data or rows_missing_goal_type:
+    if rows_with_missing_data or rows_missing_goal_type or tasks_with_missing_proj:
         st.error("Some tasks are missing required information.")
         if rows_with_missing_data:
             st.write("‘Project/Product/Course/Website’ is not set for the below task(s):")
@@ -280,8 +303,13 @@ def get_selected_dates(start_date, end_date, key, open_google_sheet):
         if rows_missing_goal_type:
             st.write("Goal Type not set for:")
             for link_text, link_url in zip(rows_missing_goal_type, row_id_missing_goal_type):
-                st.write(f"[{link_text}](https://app.clickup.com/t/{link_url})")
-        st.info("You can try generating your timesheet again once you set the above information in these tasks.")
+                st.write(f"[{link_text}](https://app.clickup.com/t/{link_url})")        
+        if tasks_with_missing_proj:
+            st.error("Some tasks have 'Product' selected but no project set.")
+            st.write("Please update the project information for the following tasks:")
+            for task_name, task_id in zip(tasks_with_missing_proj, task_ids_with_missing_proj):
+                st.write(f"[{task_name}](https://app.clickup.com/t/{task_id})")
+            st.info("You can try generating your timesheet again once you set the above information in these tasks.")
         return
 
     # Add the 'time_this_week' column by summing the values of all days_of_week columns
@@ -368,7 +396,7 @@ def main():
     st.title("Timesheet Generator")
 
     # Employee Key Entry
-    key = st.text_input("Employee ID: (e.g. E035 or C047)")
+    key = st.text_input("Employee ID: (e.g., C047)")
 
     # Date Selection with Display in 'Day, dd Mon yyyy' Format after Selection
     col1, col2 = st.columns(2)
