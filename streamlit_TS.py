@@ -22,8 +22,8 @@ from io import BytesIO
 api_key = st.secrets["auth"]
 team_id = st.secrets["team_id"]
 
-__version__ = "v3.0.1"
-__date__ = "22nd November 2024"
+__version__ = "v3.0.2"
+__date__ = "11th December 2024"
 __auth__ = api_key
 
 # Dictionary mapping month names to numbers
@@ -392,7 +392,7 @@ def main():
     image_data = response.content
     image = Image.open(BytesIO(image_data))
     image = image.resize((167, 81))
-    st.image(image, use_column_width=False)
+    st.image(image, use_container_width=False)
 
     st.title("Timesheet Generator")
 
