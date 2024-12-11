@@ -298,7 +298,7 @@ def get_selected_dates(start_date, end_date, key, open_google_sheet):
         st.error("Some tasks are missing required information.")
         if rows_with_missing_data:
             st.write("‘Project/Product/Course/Website’ is not set for the below task(s):")
-            st.write(columns_to_check)
+            # st.write(columns_to_check)
             for link_text, link_url in zip(rows_with_missing_data, row_id_with_missing_data):
                 st.write(f"[{link_text}](https://app.clickup.com/t/{link_url})")
         if rows_missing_goal_type:
