@@ -37,14 +37,14 @@ columns_to_check = [
     "Course", "Product", "Proj-Common-Activity", "Proj-Outside-Office",
     "Management-Project", "Technology-Project", "Linguistic-Project",
     "MMedia-Project", "Project-CST", "Sales-Mktg-Project", "Project-ELA",
-    "Proj-KidsPersona", "FinAcc-Project", "Website", "SFH-Admin-Project",
+    "Proj-KidsPersona", "Project-Finance", "Website", "SFH-Admin-Project",
     "Admin-Project", "Linguistic-Activity"
 ]
 project_columns = [
     "Proj-Common-Activity", "Proj-Outside-Office",
     "Management-Project", "Technology-Project", "Linguistic-Project",
     "MMedia-Project", "Project-CST", "Sales-Mktg-Project", "Project-ELA",
-    "Proj-KidsPersona", "FinAcc-Project", "SFH-Admin-Project",
+    "Proj-KidsPersona", "Project-Finance", "SFH-Admin-Project",
     "Admin-Project", "Linguistic-Activity"
 ]
 
