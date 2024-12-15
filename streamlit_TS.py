@@ -265,6 +265,7 @@ def get_selected_dates(start_date, end_date, key, open_google_sheet):
     tasks_with_missing_proj = []
     task_ids_with_missing_proj = []
     project_columns_check = list(set(df_h.columns.tolist()).intersection(columns_to_check))
+    project_columns = list(set(df_h.columns.tolist()).intersection(project_columns))
     # Iterate through rows in the DataFrame
     for index, row in df_h.iterrows():
         # Extract the 'Task Name' column value for the current row
