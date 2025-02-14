@@ -19,10 +19,8 @@ import pytz
 from PIL import Image
 from io import BytesIO
 
-#api_key = st.secrets["auth"]
-#team_id = st.secrets["team_id"]
-api_key = "pk_3326657_EOM3G6Z3CKH2W61H8NOL5T7AGO9D7LNN"
-team_id = "3314662"
+api_key = st.secrets["auth"]
+team_id = st.secrets["team_id"]
 
 __version__ = "v3.0.2"
 __date__ = "11th December 2024"
