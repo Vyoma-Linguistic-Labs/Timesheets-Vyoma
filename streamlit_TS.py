@@ -18,14 +18,15 @@ import numpy as np
 import pytz
 from PIL import Image
 from io import BytesIO
+import json
 
 #api_key = st.secrets["auth"]
 #team_id = st.secrets["team_id"]
 api_key = "pk_3326657_EOM3G6Z3CKH2W61H8NOL5T7AGO9D7LNN"
 team_id = "3314662"
 
-__version__ = "v3.0.2"
-__date__ = "11th December 2024"
+__version__ = "v3.0.3"
+__date__ = "9th April 2024"
 __auth__ = api_key
 
 # Dictionary mapping month names to numbers
@@ -229,24 +230,16 @@ def get_selected_dates(start_date, end_date, key, open_google_sheet):
                  'Total Time tracked for this task till now (hrs)'] = f"{hrs_mins[0]}h {hrs_mins[1]}m"
         # If there is no Custom field just continue
         try:
-            # iterate over the custom fields for the task
-            # for custom_field in tasks.get('custom_fields', []):
-            #     if 'value' in custom_field:
-            #         if custom_field['type'] == 'drop_down':
-            #             # set the value in the dataframe for the current task ID and custom field name
-            #             option_id = custom_field['value']
-            #             options = custom_field['type_config']['options']
-            #             option_name = next((opt['name'] for opt in options if opt['id'] == option_id), None)
-            #             df_h.loc[df_h['Task ID'] == task_id, custom_field['name']] = option_name
-            # iterate over the custom fields for the task
-            for custom_field in tasks['custom_fields']:
-                if 'value' in custom_field:
-                    if custom_field['type'] == 'drop_down':
-                        # set the value in the dataframe for the current task ID and custom field name
-                        df_h.loc[df_h['Task ID'] == task_id, custom_field['name']] = custom_field['type_config']['options'][custom_field['value']]['name']
+            for custom_field in tasks.get("custom_fields", []):
+                # Process custom field logic
+                if 'value' in custom_field and custom_field['type'] == 'drop_down':
+                    df_h.loc[df_h['Task ID'] == task_id, custom_field['name']] = custom_field['type_config']['options'][custom_field['value']]['name']
         except Exception as e:
-            st.write(f"Error processing custom fields for task {task_id}: {e}")
-            pass
+            error_message = f"Error processing custom fields for task {task_id}: {e}"
+            st.error(error_message)
+            # Dump the response JSON nicely for debugging
+            st.write("Task response:", json.dumps(tasks, indent=2))
+
 
     # Check if 'Proj-Common-Activity' column exists in the DataFrame
     if 'Proj-Common-Activity' in df_h.columns:
