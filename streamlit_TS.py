@@ -41,14 +41,7 @@ columns_to_check = [
     "Management-Project", "Technology-Project", "Linguistic-Project",
     "MMedia-Project", "Project-CST", "Sales-Mktg-Project", "Project-ELA",
     "Proj-KidsPersona", "Project-Finance", "Website", "SFH-Admin-Project",
-    "Admin-Project", "Linguistic-Activity"
-]
-project_columns = [
-    "Proj-Common-Activity", "Proj-Outside-Office",
-    "Management-Project", "Technology-Project", "Linguistic-Project",
-    "MMedia-Project", "Project-CST", "Sales-Mktg-Project", "Project-ELA",
-    "Proj-KidsPersona", "Project-Finance", "SFH-Admin-Project",
-    "Admin-Project", "Linguistic-Activity"
+    "Admin-Project", "Linguistic-Activity", "HR & Admin"
 ]
 
 # Create a timezone object for IST
@@ -260,7 +253,7 @@ def get_selected_dates(start_date, end_date, key, open_google_sheet):
     tasks_with_missing_proj = []
     task_ids_with_missing_proj = []
     project_columns_check = list(set(df_h.columns.tolist()).intersection(columns_to_check))
-    project_columns = [item for item in project_columns_check if 'Proj' in item or 'Activity' in item]
+    project_columns = [item for item in project_columns_check if 'Proj' in item or 'Activity' in item or 'HR & Admin' in item]
     # Iterate through rows in the DataFrame
     for index, row in df_h.iterrows():
         # Extract the 'Task Name' column value for the current row
