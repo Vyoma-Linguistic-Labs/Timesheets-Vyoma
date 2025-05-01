@@ -355,7 +355,7 @@ def main():
         image_data = response.content
         image = Image.open(BytesIO(image_data))
         image = image.resize((167, 81))
-        st.image(image, use_column_width=False)
+        st.image(image, use_container_width=False)
 
     # Display Title in the second column (centered)
     with col2:
