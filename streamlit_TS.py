@@ -325,6 +325,14 @@ def calculate_default_dates():
 
     return start_date, end_date
 
+def open_url_in_new_tab(url):
+    js_code = f"""
+    <script type="text/javascript">
+        window.open("{url}", "_blank");
+    </script>
+    """
+    html(js_code)
+    
 # Function to send email with the table formatted as plain text
 def send_email_with_table(df, to_email, cc_email, week_number, start_date_str, 
                           end_date_str, year_str,                          
@@ -338,8 +346,7 @@ def send_email_with_table(df, to_email, cc_email, week_number, start_date_str,
     # Construct the Gmail URL with the recipient, subject, body, and CC fields pre-filled
     gmail_url = f"https://mail.google.com/mail/?view=cm&to={to_email}&cc={cc_email}&su={subject}&body={body}"
 
-    # Open Gmail in the browser with the pre-filled content
-    webbrowser.open(gmail_url)
+    open_url_in_new_tab(gmail_url)
     
 # Streamlit UI
 def main():
