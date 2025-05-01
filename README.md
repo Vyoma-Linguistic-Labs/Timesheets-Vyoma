@@ -20,8 +20,10 @@ A Streamlit-based application that allows users to generate timesheets by select
 - PIL (Pillow)
 - ClickUp API
 - Google Sheets (Optional)
+- Urllib
+- Webbrowser
 
 ![image](https://github.com/user-attachments/assets/10110a24-7f39-4407-9a32-620cfd3f6f61)
 
 ## Version
-v3.0.0 (5th October 2024)
+v4.0.0 (1st may 2025)
