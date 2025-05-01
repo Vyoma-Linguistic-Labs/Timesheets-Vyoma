@@ -19,9 +19,7 @@ import pytz
 from PIL import Image
 from io import BytesIO
 import urllib.parse
-import webbrowser
 import json
-from streamlit.components.v1 import html
 
 #api_key = st.secrets["auth"]
 #team_id = st.secrets["team_id"]
@@ -326,24 +324,6 @@ def calculate_default_dates():
 
     return start_date, end_date
     
-# Function to send email with the table formatted as plain text
-def send_email_with_table(df, to_email, cc_email, week_number, start_date_str, 
-                          end_date_str, year_str,                          
-                          body="Ram ram ram,\nPlease find my weekly timesheet in this Google tracker -"):
-        
-    subject=f"Timesheet for Week #{week_number} - {start_date_str}, {year_str} - {end_date_str}, {year_str}", 
-    # Prepare the subject and body    
-    subject = urllib.parse.quote((str(subject[0])).encode('utf-8'))
-    body = urllib.parse.quote(body + "\n\n")  # Adding the plain-text table to the body
-
-    # Construct the Gmail URL with the recipient, subject, body, and CC fields pre-filled
-    gmail_url = f"https://mail.google.com/mail/?view=cm&to={to_email}&cc={cc_email}&su={subject}&body={body}"
-    st.markdown(f'''
-        <a href="{gmail_url}" target="_blank">
-            <button>Click Here to Send Email</button>
-        </a>
-    ''', unsafe_allow_html=True)    
-    
 # Streamlit UI
 def main():
     st.set_page_config(page_title="Timesheet Generator", page_icon=":calendar:", layout="wide")
@@ -430,15 +410,22 @@ def main():
         st.session_state["submit_clicked"] = False
         st.session_state["download_clicked"] = False
         st.success("Timesheet generated successfully!")
-        # Submit button
-        if st.button("Send E-mail"):            
-            send_email_with_table(st.session_state["timesheet"], to_email, cc_email,
-                                   st.session_state['week_number'],
-                                   st.session_state['start_date_str'],
-                                   st.session_state['end_date_str'],
-                                   st.session_state['year_str'])
-            st.session_state["submit_clicked"] = True
-            st.session_state["download_clicked"] = False                                        
+        
+        subject=f"Timesheet for Week #{st.session_state['week_number']} - {st.session_state['start_date_str']}, {st.session_state['year_str']} - {st.session_state['end_date_str']}, {st.session_state['year_str']}", 
+        # Prepare the subject and body    
+        subject = urllib.parse.quote((str(subject[0])).encode('utf-8'))
+        body="Ram ram ram,\nPlease find my weekly timesheet in this Google tracker -"
+        body = urllib.parse.quote(body + "\n\n")  # Adding the plain-text table to the body
+
+        # Construct the Gmail URL with the recipient, subject, body, and CC fields pre-filled
+        gmail_url = f"https://mail.google.com/mail/?view=cm&to={to_email}&cc={cc_email}&su={subject}&body={body}"
+        
+        st.markdown(f'''
+            <a href="{gmail_url}" target="_blank">
+                <button>Click Here to Send Email</button>
+            </a>
+        ''', unsafe_allow_html=True)
+                                                    
     else:
         st.info("Click 'Generate Timesheet' to create a timesheet.")
 
