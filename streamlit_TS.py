@@ -21,7 +21,7 @@ from io import BytesIO
 import urllib.parse
 import webbrowser
 import json
-from streamlit.components.v1 import HTML
+from streamlit.components.v1 import html
 
 #api_key = st.secrets["auth"]
 #team_id = st.secrets["team_id"]
