@@ -325,14 +325,6 @@ def calculate_default_dates():
     start_date = end_date - timedelta(days=6)  # Saturday is one day before Friday
 
     return start_date, end_date
-
-def open_url_in_new_tab(url):
-    js_code = f"""
-    <script type="text/javascript">
-        window.open("{url}", "_blank");
-    </script>
-    """
-    html(js_code)
     
 # Function to send email with the table formatted as plain text
 def send_email_with_table(df, to_email, cc_email, week_number, start_date_str, 
@@ -346,8 +338,11 @@ def send_email_with_table(df, to_email, cc_email, week_number, start_date_str,
 
     # Construct the Gmail URL with the recipient, subject, body, and CC fields pre-filled
     gmail_url = f"https://mail.google.com/mail/?view=cm&to={to_email}&cc={cc_email}&su={subject}&body={body}"
-
-    open_url_in_new_tab(gmail_url)
+    st.markdown(f'''
+        <a href="{gmail_url}" target="_blank">
+            <button>Click Here to Send Email</button>
+        </a>
+    ''', unsafe_allow_html=True)    
     
 # Streamlit UI
 def main():
