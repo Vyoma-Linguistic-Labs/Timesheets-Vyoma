@@ -6,3 +6,6 @@ numpy
 pytz
 pillow
 xlsxwriter
+json
+webbrowser
+urllib
