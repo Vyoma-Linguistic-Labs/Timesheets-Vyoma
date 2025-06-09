@@ -38,11 +38,11 @@ month_dict = {
 
 # Define the list of columns to check for NaN
 columns_to_check = [
-    "Course", "Product", "Proj-Common-Activity", "Proj-Outside-Office",
-    "Management-Project", "Technology-Project", "Linguistic-Project",
-    "MMedia-Project", "Project-CST", "Sales-Mktg-Project", "Project-ELA",
-    "Proj-KidsPersona", "Project-Finance", "Website", "SFH-Admin-Project",
-    "Admin-Project", "Linguistic-Activity", "HR & Admin"
+    "Course", "Product", "Common Activities", "Outside Office Tasks",
+    "Management Activities", "Technology", "Linguistics",
+    "Multi-Media", "Customer Seva", "Sales & Marketing", "ELearning",
+    "Kids Persona", "Finance", "Website", "SFH Admin",
+    "Admin", "Linguistic-Activity", "HR & Admin"
 ]
 
 # Create a timezone object for IST
@@ -185,7 +185,7 @@ def get_selected_dates(start_date, end_date, key, open_google_sheet, to_email, c
     # Check if 'Proj-Common-Activity' column exists in the DataFrame
     if 'Proj-Common-Activity' in df.columns:
         # Filter out rows where 'Proj-Common-Activity' is 'Vyoma Holiday' or 'Personal Leave'
-        df = df[(df['Proj-Common-Activity'] != 'Vyoma Holiday') & (df['Proj-Common-Activity'] != 'Personal Leave')]
+        df = df[(df['Common Activities'] != 'Vyoma Holiday') & (df['Common Activities'] != 'Personal Leave')]
 
     # Check if 'Goal Type' column exists
     if 'Goal Type' not in df.columns:
@@ -201,7 +201,8 @@ def get_selected_dates(start_date, end_date, key, open_google_sheet, to_email, c
     tasks_with_missing_proj = []
     task_ids_with_missing_proj = []
     project_columns_check = list(set(df.columns.tolist()).intersection(columns_to_check))
-    project_columns = [item for item in project_columns_check if 'Proj' in item or 'Activity' in item or 'HR & Admin' in item]
+    project_columns = [item for item in project_columns_check if item in columns_to_check[2:]] #'Proj' in item or 'Activity' in item or 'HR & Admin' in item]
+    # project_columns = columns_to_check[2:]
     # Iterate through rows in the DataFrame
     for index, row in df.iterrows():
         # Extract the 'Task Name' column value for the current row
