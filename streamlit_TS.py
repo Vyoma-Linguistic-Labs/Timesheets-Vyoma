@@ -26,8 +26,8 @@ import json
 api_key = "pk_3326657_EOM3G6Z3CKH2W61H8NOL5T7AGO9D7LNN"
 team_id = "3314662"
 
-__version__ = "v4.0.0"
-__date__ = "1st May 2025"
+__version__ = "v4.0.1"
+__date__ = "10th June 2025"
 __auth__ = api_key
 
 # Dictionary mapping month names to numbers
@@ -39,7 +39,7 @@ month_dict = {
 # Define the list of columns to check for NaN
 columns_to_check = [
     "Course", "Product", "Common Activities", "Outside Office Tasks",
-    "Management Activities", "Technology", "Linguistics",
+    "Management Activities", "Technology", "Linguistic-Project",
     "Multi-Media", "Customer Seva", "Sales & Marketing", "ELearning",
     "Kids Persona", "Finance", "Website", "SFH Admin",
     "Admin", "Linguistic-Activity", "HR & Admin"
