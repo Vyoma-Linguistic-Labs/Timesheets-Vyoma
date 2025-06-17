@@ -42,7 +42,7 @@ columns_to_check = [
     "Management Activities", "Technology", "Linguistic-Project",
     "Multi-Media", "Customer Seva", "Sales & Marketing", "ELearning",
     "Kids Persona", "Finance", "Website", "SFH Admin",
-    "Admin", "Linguistic-Activity", "HR & Admin"
+    "Admin", "Linguistic Activity", "HR & Admin"
 ]
 
 # Create a timezone object for IST
