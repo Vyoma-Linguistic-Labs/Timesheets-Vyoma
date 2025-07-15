@@ -273,7 +273,7 @@ def get_selected_dates(start_date, end_date, key, open_google_sheet, to_email, c
     if rows_with_missing_data or rows_missing_goal_type or tasks_with_missing_proj:
         st.error("Some tasks are missing required information.")
         if rows_with_missing_data:
-            st.write("'Project/Product/Course/Website' is not set for the below task(s):")
+            st.write("‘Project/Product/Course/Website’ is not set for the below task(s):")
             # st.write(columns_to_check)
             for link_text, link_url in zip(rows_with_missing_data, row_id_with_missing_data):
                 st.write(f"[{link_text}](https://app.clickup.com/t/{link_url})")
@@ -371,18 +371,19 @@ def get_selected_dates(start_date, end_date, key, open_google_sheet, to_email, c
     if len(totals_start_index) > 0:
         # Only reset index for rows before the totals
         actual_task_rows = totals_start_index[0]
-        df.index = range(len(df))
         
-        # Set index to start from 1 only for actual task rows
-        for i in range(actual_task_rows):
-            df.index.values[i] = i + 1
+        # Create a new index where task rows start from 1 and totals rows are empty
+        new_index = []
+        for i in range(len(df)):
+            if i < actual_task_rows:
+                new_index.append(str(i + 1))  # Convert to string for consistency
+            else:
+                new_index.append("")  # Empty string for totals rows
         
-        # Keep empty index for totals and summary rows
-        for i in range(actual_task_rows, len(df)):
-            df.index.values[i] = ""
+        df.index = new_index
     else:
         # Fallback: set index to start from 1 for all rows
-        df.index = df.index + 1
+        df.index = [str(i + 1) for i in range(len(df))]
     
     return df
 
