@@ -510,7 +510,7 @@ def main():
             image_data = response.content
             image = Image.open(BytesIO(image_data))
             image = image.resize((100, 49))  # Smaller size for table header
-            st.image(image, use_column_width=False)
+            st.image(image, use_container_width=False)
         
         # Display the timesheet as a table   
         # cell‐wise formatter
