@@ -20,14 +20,15 @@ from PIL import Image
 from io import BytesIO
 import urllib.parse
 import json
+import calendar
 
-#api_key = st.secrets["auth"]
-#team_id = st.secrets["team_id"]
+# api_key = st.secrets["auth"]
+# team_id = st.secrets["team_id"]
 api_key = "pk_3326657_EOM3G6Z3CKH2W61H8NOL5T7AGO9D7LNN"
 team_id = "3314662"
 
-__version__ = "v4.0.1"
-__date__ = "10th June 2025"
+__version__ = "v4.0.2"
+__date__ = "15th July 2025"
 __auth__ = api_key
 
 # Dictionary mapping month names to numbers
@@ -78,8 +79,45 @@ def memberInfo():
 
     return members_dict
 
+def get_employee_name(employee_id):
+    """Get employee name from member info"""
+    members_dict = memberInfo()
+    # This is a simplified version - you might need to enhance this
+    # to get actual employee names from your system
+    return f"Employee_{employee_id}"
+
+def get_monthly_data(employee_key, month, year):
+    """Get monthly timesheet data for an employee"""
+    # Get first and last day of the month
+    first_day = datetime(year, month, 1)
+    last_day = datetime(year, month, calendar.monthrange(year, month)[1])
+    
+    # Convert to timestamps
+    start_timestamp = int(datetime.combine(first_day, datetime.min.time()).replace(tzinfo=timezone.utc).timestamp())
+    end_timestamp = int(datetime.combine(last_day, datetime.min.time()).replace(tzinfo=timezone.utc).timestamp())
+
+    url = f"https://api.clickup.com/api/v2/team/{team_id}/time_entries"
+    query = {
+        "start_date": str((start_timestamp - 19800) * 1000),
+        "end_date": str((end_timestamp + 86399) * 1000 - 19800000),
+        "assignee": employee_key,
+    }
+
+    headers = {"Content-Type": "application/json", "Authorization": __auth__}
+    response = requests.get(url, headers=headers, params=query)
+    data = response.json()
+
+    if 'data' not in data or not data['data']:
+        return 0
+
+    # Calculate total hours for the month
+    total_milliseconds = sum(int(entry['duration']) for entry in data['data'])
+    total_hours = total_milliseconds / 3600000  # Convert to hours
+    
+    return total_hours
+
 # Optimized `get_selected_dates` function
-def get_selected_dates(start_date, end_date, key, open_google_sheet, to_email, cc_email):
+def get_selected_dates(start_date, end_date, key, open_google_sheet, to_email, cc_email, ts_tracker_link, show_monthly_total=False, selected_month=None, selected_year=None):
     if not key:
         st.error("Please enter your Employee ID.")
         return
@@ -94,6 +132,7 @@ def get_selected_dates(start_date, end_date, key, open_google_sheet, to_email, c
     st.session_state['start_date_str'] = start_date_str
     st.session_state['end_date_str'] = end_date_str
     st.session_state['year_str'] = year_str
+    st.session_state['ts_tracker_link'] = ts_tracker_link
     
     # Generate filename
     filename = f"{key}_{start_date_str}_to_{end_date_str}_{year_str}.xlsx"
@@ -181,7 +220,6 @@ def get_selected_dates(start_date, end_date, key, open_google_sheet, to_email, c
             # Dump the response JSON nicely for debugging
             st.write("Task response:", json.dumps(tasks, indent=2))
 
-
     # Check if 'Proj-Common-Activity' column exists in the DataFrame
     if 'Proj-Common-Activity' in df.columns:
         # Filter out rows where 'Proj-Common-Activity' is 'Vyoma Holiday' or 'Personal Leave'
@@ -235,7 +273,7 @@ def get_selected_dates(start_date, end_date, key, open_google_sheet, to_email, c
     if rows_with_missing_data or rows_missing_goal_type or tasks_with_missing_proj:
         st.error("Some tasks are missing required information.")
         if rows_with_missing_data:
-            st.write("‘Project/Product/Course/Website’ is not set for the below task(s):")
+            st.write("'Project/Product/Course/Website' is not set for the below task(s):")
             # st.write(columns_to_check)
             for link_text, link_url in zip(rows_with_missing_data, row_id_with_missing_data):
                 st.write(f"[{link_text}](https://app.clickup.com/t/{link_url})")
@@ -264,18 +302,27 @@ def get_selected_dates(start_date, end_date, key, open_google_sheet, to_email, c
     df = pd.concat([df, empty_row.to_frame().T], ignore_index=True)
     df.iloc[-1, 5] = weekly_total
 
+    # Add monthly total if requested
+    if show_monthly_total and selected_month and selected_year:
+        monthly_total = get_monthly_data(employee_key, selected_month, selected_year)
+        st.session_state['monthly_total'] = monthly_total
+        empty_row = pd.Series([np.nan] * len(df.columns), index=df.columns)
+        df = pd.concat([df, empty_row.to_frame().T], ignore_index=True)
+        df.iloc[-1, 3] = f'Total Hours for {calendar.month_name[selected_month]} {selected_year}'
+        df.iloc[-1, 5] = monthly_total
+
     days_diff = (end_date - start_date).days + 1
     if days_diff <= 7:
         df.iloc[:, 3] = df.iloc[:, 3].astype(object)
-        df.iloc[-1, 3] = "Week's total ="
+        df.iloc[-2 if show_monthly_total else -1, 3] = "Week's total ="
         week_number = end_date.isocalendar()[1]
         st.session_state['week_number'] = week_number
-        df.at[df.index[-1], 'Task Name'] = f'Week #{week_number} - {start_date_str}, {year_str} - {end_date_str}, {year_str}'
+        df.at[df.index[-2 if show_monthly_total else -1], 'Task Name'] = f'Week #{week_number} - {start_date_str}, {year_str} - {end_date_str}, {year_str}'
     else:
-        df.iloc[-1, 3] = 'Total Hours'
-        df.at[df.index[-1], 'Task Name'] = f'{start_date_str}, {year_str} - {end_date_str}, {year_str}'
+        df.iloc[-2 if show_monthly_total else -1, 3] = 'Total Hours'
+        df.at[df.index[-2 if show_monthly_total else -1], 'Task Name'] = f'{start_date_str}, {year_str} - {end_date_str}, {year_str}'
 
-    # Reorder column: move 'Total (this week)'  to the 11th position.
+    # Reorder column: move 'Total (this week)' to the 11th position.
     df.insert(10, 'Total (this week)', df.pop('Total (this week)'))
 
     # Write to Excel
@@ -298,14 +345,45 @@ def get_selected_dates(start_date, end_date, key, open_google_sheet, to_email, c
     )
 
     st.write(f"Total Hours for this time frame: {weekly_total:.2f}")
+    if show_monthly_total and selected_month and selected_year:
+        st.write(f"Total Hours for {calendar.month_name[selected_month]} {selected_year}: {monthly_total:.2f}")
     st.write(f"Processing Time: {time.time() - start_time_process:.2f} seconds")    
     
     if open_google_sheet:
-        st.write("[Open Google Sheet for TS Submission Status](https://docs.google.com/spreadsheets/d/1XLDSTT5m952eiOXhiUtxldIIoEAfQgiVKv5XY2HFOBg/edit?usp=sharing)")    
+        st.markdown("""
+        <script>
+        window.open('https://docs.google.com/spreadsheets/d/1XLDSTT5m952eiOXhiUtxldIIoEAfQgiVKv5XY2HFOBg/edit?usp=sharing', '_blank');
+        </script>
+        """, unsafe_allow_html=True)
+        st.success("Opening Google Sheet for TS Submission Status...")
+        st.write("If the sheet didn't open automatically, [click here to open it manually](https://docs.google.com/spreadsheets/d/1XLDSTT5m952eiOXhiUtxldIIoEAfQgiVKv5XY2HFOBg/edit?usp=sharing)")
     
     # 1) replace <NA> with blanks
     df = df.fillna('')    
     df = df.replace(['nan', 'na'], '', regex=True)
+    
+    # Reset index to start from 1 instead of 0, but only for actual task rows
+    df.reset_index(drop=True, inplace=True)
+    
+    # Find the index where totals start (where 'Task Status' is 'Daily Totals ->')
+    totals_start_index = df[df['Task Status'] == 'Daily Totals ->'].index
+    
+    if len(totals_start_index) > 0:
+        # Only reset index for rows before the totals
+        actual_task_rows = totals_start_index[0]
+        df.index = range(len(df))
+        
+        # Set index to start from 1 only for actual task rows
+        for i in range(actual_task_rows):
+            df.index.values[i] = i + 1
+        
+        # Keep empty index for totals and summary rows
+        for i in range(actual_task_rows, len(df)):
+            df.index.values[i] = ""
+    else:
+        # Fallback: set index to start from 1 for all rows
+        df.index = df.index + 1
+    
     return df
 
 # Function to calculate the default start and end dates based on today's date
@@ -339,7 +417,7 @@ def main():
         image_data = response.content
         image = Image.open(BytesIO(image_data))
         image = image.resize((167, 81))
-        st.image(image, use_container_width=False)
+        st.image(image, use_column_width=False)
 
     # Display Title in the second column (centered)
     with col2:
@@ -352,6 +430,8 @@ def main():
         st.session_state['end_date_str'] = None
         st.session_state['year_str'] = None
         st.session_state['week_number'] = None
+        st.session_state['ts_tracker_link'] = None
+        st.session_state['monthly_total'] = None
     if "submit_clicked" not in st.session_state:
         st.session_state["submit_clicked"] = False
     if "download_clicked" not in st.session_state:
@@ -359,6 +439,9 @@ def main():
 
     # Employee Key Entry
     key = st.text_input("Employee ID: (e.g., C047)")
+    
+    # TS Tracker Link - Mandatory field
+    ts_tracker_link = st.text_input("TS Tracker Link: (Mandatory)", placeholder="Enter your timesheet tracker link")
     
     # Get default start and end dates based on today's date
     default_start_date, default_end_date = calculate_default_dates()
@@ -382,16 +465,52 @@ def main():
         cc_email = st.text_input("CC (CC Email Address)", 
                                  "srilatha.vyoma@gmail.com, hr@vyomalabs.in")  # Prefill CC field    
 
+    # Monthly total options
+    show_monthly_total = st.checkbox("Show Monthly Total")
+    
+    selected_month = None
+    selected_year = None
+    
+    if show_monthly_total:
+        col1, col2 = st.columns(2)
+        with col1:
+            selected_month = st.selectbox("Select Month", 
+                                        options=list(range(1, 13)),
+                                        format_func=lambda x: calendar.month_name[x],
+                                        index=datetime.now().month - 1)
+        with col2:
+            selected_year = st.selectbox("Select Year", 
+                                       options=list(range(2020, 2030)),
+                                       index=datetime.now().year - 2020)
+
     # Create checkboxes
     open_google_sheet = st.checkbox("Open the Google sheet for TS Submission Status")    
 
     # Button to generate the timesheet
     if st.button("Generate Timesheet"):
-        # Generate the DataFrame and store it in session state
-        st.session_state["timesheet"] = get_selected_dates(start_date, end_date, key, open_google_sheet, to_email, cc_email)        
+        if not ts_tracker_link.strip():
+            st.error("TS Tracker Link is mandatory. Please enter your timesheet tracker link.")
+        else:
+            # Generate the DataFrame and store it in session state
+            st.session_state["timesheet"] = get_selected_dates(start_date, end_date, key, open_google_sheet, 
+                                                             to_email, cc_email, ts_tracker_link, 
+                                                             show_monthly_total, selected_month, selected_year)        
         
     # Check if the timesheet exists in session state
     if st.session_state["timesheet"] is not None:
+        # Add Vyoma logo above the table
+        st.markdown("---")
+        
+        # Display logo above the table
+        col_logo, col_spacer = st.columns([1, 4])
+        with col_logo:
+            image_url = "https://digitalsanskritguru.com/wp-content/uploads/2020/05/Vyoma_Logo_Blue_500x243.png"
+            response = requests.get(image_url)
+            image_data = response.content
+            image = Image.open(BytesIO(image_data))
+            image = image.resize((100, 49))  # Smaller size for table header
+            st.image(image, use_column_width=False)
+        
         # Display the timesheet as a table   
         # cell‐wise formatter
         def fmt_cell(x):
@@ -412,20 +531,32 @@ def main():
         st.session_state["download_clicked"] = False
         st.success("Timesheet generated successfully!")
         
-        subject=f"Timesheet for Week #{st.session_state['week_number']} - {st.session_state['start_date_str']}, {st.session_state['year_str']} - {st.session_state['end_date_str']}, {st.session_state['year_str']}", 
-        # Prepare the subject and body    
-        subject = urllib.parse.quote((str(subject[0])).encode('utf-8'))
-        body="Ram ram ram,\nPlease find my weekly timesheet in this Google tracker -"
-        body = urllib.parse.quote(body + "\n\n")  # Adding the plain-text table to the body
-
-        # Construct the Gmail URL with the recipient, subject, body, and CC fields pre-filled
-        gmail_url = f"https://mail.google.com/mail/?view=cm&to={to_email}&cc={cc_email}&su={subject}&body={body}"
+        # Checkbox for confirmation that user has pasted data in tracker
+        ts_pasted_confirmation = st.checkbox("Have you pasted this week's timesheet data in your online tracker?", 
+                                           key="ts_confirmation")
         
-        st.markdown(f'''
-            <a href="{gmail_url}" target="_blank">
-                <button>Click Here to Send Email</button>
-            </a>
-        ''', unsafe_allow_html=True)
+        if ts_pasted_confirmation:
+            employee_name = get_employee_name(key)
+            subject = f"Timesheet for Week #{st.session_state['week_number']} - {st.session_state['start_date_str']}, {st.session_state['year_str']} - {st.session_state['end_date_str']}, {st.session_state['year_str']}"
+            
+            # Prepare the subject and body with hyperlinked tracker    
+            subject_encoded = urllib.parse.quote(subject.encode('utf-8'))
+            body = f"Ram ram ram,\nPlease find my weekly timesheet in this Google tracker -\n\n{employee_name} TS Tracker: {st.session_state['ts_tracker_link']}\n\n<Paste the timesheet screenshot here>\n"
+            body_encoded = urllib.parse.quote(body.encode('utf-8'))
+
+            # Construct the Gmail URL with the recipient, subject, body, and CC fields pre-filled
+            gmail_url = f"https://mail.google.com/mail/?view=cm&to={to_email}&cc={cc_email}&su={subject_encoded}&body={body_encoded}"
+            
+            st.markdown(f'''
+                <a href="{gmail_url}" target="_blank">
+                    <button style="background-color: #4CAF50; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer;">
+                        Click Here to Send Email
+                    </button>
+                </a>
+            ''', unsafe_allow_html=True)
+        else:
+            if st.session_state["timesheet"] is not None:
+                st.warning("Please confirm that you have pasted the timesheet data in your tracker before sending the email.")
                                                     
     else:
         st.info("Click 'Generate Timesheet' to create a timesheet.")
