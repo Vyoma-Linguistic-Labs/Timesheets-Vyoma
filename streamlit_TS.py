@@ -27,8 +27,8 @@ import calendar
 api_key = "pk_3326657_EOM3G6Z3CKH2W61H8NOL5T7AGO9D7LNN"
 team_id = "3314662"
 
-__version__ = "v4.0.2"
-__date__ = "15th July 2025"
+__version__ = "v4.0.3"
+__date__ = "2nd December 2025"
 __auth__ = api_key
 
 # Dictionary mapping month names to numbers
@@ -37,14 +37,20 @@ month_dict = {
     "Aug": 8, "Sep": 9, "Oct": 10, "Nov": 11, "Dec": 12
 }
 
-# Define the list of columns to check for NaN
-columns_to_check = [
-    "Course", "Product", "Common Activities", "Outside Office Tasks",
-    "Management Activities", "Technology", "Linguistic-Project",
-    "Multi-Media", "Customer Seva", "Sales & Marketing", "ELearning",
-    "Kids Persona", "Finance", "Website", "SFH Admin",
-    "Admin", "Linguistic Activity", "HR & Admin"
+# Define the MAIN AREA fields (Section 1 - At least one must be set)
+main_area_fields = [
+    "Linguistic Activity", "ELearning", "Technology", "Sales & Marketing", 
+    "Customer Seva", "Finance", "Kids Persona", "Multi-Media", 
+    "Management Activities", "Outside Office Tasks", "Common Activities", "IKS"
 ]
+
+# Define the OPTIONAL fields (Section 2)
+optional_fields = [
+    "Project ID", "Course", "Website", "Product", "Linguistic-Project"
+]
+
+# Combined list for backward compatibility
+columns_to_check = main_area_fields + optional_fields
 
 # Create a timezone object for IST
 ist_timezone = pytz.timezone('Asia/Kolkata')
@@ -230,63 +236,67 @@ def get_selected_dates(start_date, end_date, key, open_google_sheet, to_email, c
         # Add a new column with 'nan' values
         df['Goal Type'] = np.nan
 
-    # Initialize a list to collect the names of rows that do not fit the criterion
-    rows_with_missing_data = []
-    row_id_with_missing_data = []
+    # Initialize lists to collect validation errors
+    rows_missing_main_area = []
+    row_id_missing_main_area = []
     rows_missing_goal_type = []
     row_id_missing_goal_type = []
-    # Add the new condition to check 'Product' and '-Proj' columns
-    tasks_with_missing_proj = []
-    task_ids_with_missing_proj = []
-    project_columns_check = list(set(df.columns.tolist()).intersection(columns_to_check))
-    project_columns = [item for item in project_columns_check if item in columns_to_check[2:]] #'Proj' in item or 'Activity' in item or 'HR & Admin' in item]
-    # project_columns = columns_to_check[2:]
+    tasks_with_optional_but_no_main = []
+    task_ids_with_optional_but_no_main = []
+    
+    # Get available columns in the dataframe
+    available_main_area_fields = [field for field in main_area_fields if field in df.columns]
+    available_optional_fields = [field for field in optional_fields if field in df.columns]
+    
     # Iterate through rows in the DataFrame
     for index, row in df.iterrows():
         # Extract the 'Task Name' column value for the current row
         task_name = row['Task Name']
         task_id = row['Task ID']
         
-        # Updated code to handle both 'nan' strings and np.nan values
-        if all(is_nan(row[col]) for col in project_columns_check):  # All specified columns are NaN
-            rows_with_missing_data.append(task_name)
-            row_id_with_missing_data.append(task_id)
+        # Check if at least one Main Area field (Section 1) is set
+        has_main_area = any(not is_nan(row[col]) for col in available_main_area_fields)
         
-        if is_nan(row['Goal Type']):  # Goal Type is NaN
+        # Check if any Optional field (Section 2) is set
+        has_optional = any(not is_nan(row[col]) for col in available_optional_fields)
+        
+        # Validation 1: If no Main Area field is set at all
+        if not has_main_area:
+            rows_missing_main_area.append(task_name)
+            row_id_missing_main_area.append(task_id)
+        
+        # Validation 2: If Optional field is set but no Main Area field is set
+        if has_optional and not has_main_area:
+            tasks_with_optional_but_no_main.append(task_name)
+            task_ids_with_optional_but_no_main.append(task_id)
+        
+        # Validation 3: Goal Type is mandatory
+        if is_nan(row['Goal Type']):
             rows_missing_goal_type.append(task_name)
             row_id_missing_goal_type.append(task_id)
-            
-        # Check if 'Product' column has a value
-        if 'Project ID' in df.columns and not is_nan(row['Project ID']):            
-            # Check if any column ending with '-Proj' has a value
-            project_set = False
-            for col in project_columns:
-                if (col in project_columns) and not is_nan(row[col]):
-                    project_set = True
-                    break            
-            # If no '-Proj' column has a value, collect the task details
-            if not project_set:
-                tasks_with_missing_proj.append(row['Task Name'])
-                task_ids_with_missing_proj.append(row['Task ID']) 
 
-    # Output the names of rows that do not fit the criterion
-    if rows_with_missing_data or rows_missing_goal_type or tasks_with_missing_proj:
+    # Output validation errors
+    if rows_missing_main_area or rows_missing_goal_type or tasks_with_optional_but_no_main:
         st.error("Some tasks are missing required information.")
-        if rows_with_missing_data:
-            st.write("‘Project/Product/Course/Website’ is not set for the below task(s):")
-            # st.write(columns_to_check)
-            for link_text, link_url in zip(rows_with_missing_data, row_id_with_missing_data):
+        
+        if rows_missing_main_area:
+            st.write("**Main Area of Work (Section 1) is not set for the below task(s):**")
+            st.write("At least one of these must be set: " + ", ".join(main_area_fields))
+            for link_text, link_url in zip(rows_missing_main_area, row_id_missing_main_area):
                 st.write(f"[{link_text}](https://app.clickup.com/t/{link_url})")
-        if rows_missing_goal_type:
-            st.write("Goal Type not set for:")
-            for link_text, link_url in zip(rows_missing_goal_type, row_id_missing_goal_type):
-                st.write(f"[{link_text}](https://app.clickup.com/t/{link_url})")        
-        if tasks_with_missing_proj:
-            st.error("Some tasks have 'Product' selected but no project set.")
-            st.write("Please update the project information for the following tasks:")
-            for task_name, task_id in zip(tasks_with_missing_proj, task_ids_with_missing_proj):
+        
+        if tasks_with_optional_but_no_main:
+            st.error("**Some tasks have Optional fields (Section 2) set but no Main Area field (Section 1) set:**")
+            st.write("When you set any Optional field (Project ID, Course, Website, Product, Linguistic-Project), you must also set at least one Main Area field.")
+            for task_name, task_id in zip(tasks_with_optional_but_no_main, task_ids_with_optional_but_no_main):
                 st.write(f"[{task_name}](https://app.clickup.com/t/{task_id})")
-            st.info("You can try generating your timesheet again once you set the above information in these tasks.")
+        
+        if rows_missing_goal_type:
+            st.write("**Goal Type (Mandatory Field) not set for:**")
+            for link_text, link_url in zip(rows_missing_goal_type, row_id_missing_goal_type):
+                st.write(f"[{link_text}](https://app.clickup.com/t/{link_url})")
+        
+        st.info("You can try generating your timesheet again once you set the above information in these tasks.")
         return
     
     # Add total tracked time for the week
@@ -423,6 +433,25 @@ def main():
     # Display Title in the second column (centered)
     with col2:
         st.markdown("<h1 style='text-align: left;'>Timesheet Generator</h1>", unsafe_allow_html=True)
+
+    # Add instructions at the top
+    st.markdown("---")
+    st.markdown("### 📋 Instructions for Setting Task Fields in ClickUp")
+    st.info("""
+    **While setting various fields in your tasks, please ensure the following:**
+    
+    **1. Main Area of Work (Section 1) - At least ONE must be set for every task:**
+    - Linguistic Activity, ELearning, Technology, Sales & Marketing, Customer Seva, Finance, 
+    Kids Persona, Multi-Media, Management Activities, Outside Office Tasks, Common Activities, IKS
+    
+    **2. Optional Fields (Section 2) - Can be set if the task is related to any of these:**
+    - Project ID, Course, Website, Product, Linguistic-Project
+    - **Note:** If you set any field in Section 2, at least one field in Section 1 must also be set
+    
+    **3. Mandatory Field (Section 3) - Must be set for ALL tasks:**
+    - Goal Type
+    """)
+    st.markdown("---")
 
     # Initialize session state variables
     if "timesheet" not in st.session_state:
