@@ -40,7 +40,7 @@ month_dict = {
 # Define the MAIN AREA fields (Section 1 - At least one must be set)
 main_area_fields = [
     "Linguistic Activity", "ELearning", "Technology", "Sales & Marketing", 
-    "Customer Seva", "Finance", "Kids Persona", "Multi-Media", 
+    "Customer Seva", "Finance", "Kids Persona", "Multi-Media", "HR & Admin",
     "Management Activities", "Outside Office Tasks", "Common Activities", "IKS"
 ]
 
@@ -596,3 +596,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
