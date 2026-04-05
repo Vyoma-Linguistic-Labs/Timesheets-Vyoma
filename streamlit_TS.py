@@ -310,7 +310,7 @@ def get_selected_dates(start_date, end_date, key, open_google_sheet, to_email, c
     df.at[df.index[-1], 'Task Status'] = 'Daily Totals ->'
     empty_row = pd.Series([np.nan] * len(df.columns), index=df.columns)
     df = pd.concat([df, empty_row.to_frame().T], ignore_index=True)
-    df.iloc[-1, 5] = weekly_total
+    df.at[df.index[-1], 'Total (this week)'] = weekly_total
 
     # Add monthly total if requested
     if show_monthly_total and selected_month and selected_year:
@@ -318,19 +318,19 @@ def get_selected_dates(start_date, end_date, key, open_google_sheet, to_email, c
         st.session_state['monthly_total'] = monthly_total
         empty_row = pd.Series([np.nan] * len(df.columns), index=df.columns)
         df = pd.concat([df, empty_row.to_frame().T], ignore_index=True)
-        df.iloc[-1, 3] = f'Total Hours for {calendar.month_name[selected_month]} {selected_year}'
-        df.iloc[-1, 5] = monthly_total
+        df.at[df.index[-1], 'Task Status'] = f'Total Hours for {calendar.month_name[selected_month]} {selected_year}'
+        df.at[df.index[-1], 'Total (this week)'] = monthly_total
 
     days_diff = (end_date - start_date).days + 1
+    summary_row_index = df.index[-2 if show_monthly_total else -1]
     if days_diff <= 7:
-        df.iloc[:, 3] = df.iloc[:, 3].astype(object)
-        df.iloc[-2 if show_monthly_total else -1, 3] = "Week's total ="
         week_number = end_date.isocalendar()[1]
         st.session_state['week_number'] = week_number
-        df.at[df.index[-2 if show_monthly_total else -1], 'Task Name'] = f'Week #{week_number} - {start_date_str}, {year_str} - {end_date_str}, {year_str}'
+        df.at[summary_row_index, 'Task Status'] = "Week's total ="
+        df.at[summary_row_index, 'Task Name'] = f'Week #{week_number} - {start_date_str}, {year_str} - {end_date_str}, {year_str}'
     else:
-        df.iloc[-2 if show_monthly_total else -1, 3] = 'Total Hours'
-        df.at[df.index[-2 if show_monthly_total else -1], 'Task Name'] = f'{start_date_str}, {year_str} - {end_date_str}, {year_str}'
+        df.at[summary_row_index, 'Task Status'] = 'Total Hours'
+        df.at[summary_row_index, 'Task Name'] = f'{start_date_str}, {year_str} - {end_date_str}, {year_str}'
 
     # Reorder column: move 'Total (this week)' to the 11th position.
     df.insert(10, 'Total (this week)', df.pop('Total (this week)'))
