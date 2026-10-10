@@ -22,8 +22,8 @@ import urllib.parse
 import json
 import calendar
 
-api_key = st.secrets["clickup_api_key"]
-team_id = st.secrets["team_id"]
+api_key = st.secrets.get("clickup_api_key", "pk_PASTE_TOKEN_HERE")
+team_id = st.secrets.get("team_id", "3314662")
 
 __version__ = "v4.0.3"
 __date__ = "2nd December 2025"
