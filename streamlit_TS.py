@@ -22,10 +22,8 @@ import urllib.parse
 import json
 import calendar
 
-# api_key = st.secrets["auth"]
-# team_id = st.secrets["team_id"]
-api_key = "pk_3326657_EOM3G6Z3CKH2W61H8NOL5T7AGO9D7LNN"
-team_id = "3314662"
+api_key = st.secrets["clickup_api_key"]
+team_id = st.secrets["team_id"]
 
 __version__ = "v4.0.3"
 __date__ = "2nd December 2025"
@@ -66,31 +64,72 @@ def convert_milliseconds_to_hours_minutes(milliseconds):
     minutes = minutes % 60
     return (int(hours), int(minutes))
 
+def clickup_get(url, params=None):
+    """Call the ClickUp API and stop the app with a clear message if it fails."""
+    headers = {"Content-Type": "application/json", "Authorization": __auth__}
+    try:
+        response = requests.get(url, headers=headers, params=params, timeout=30)
+    except requests.RequestException as e:
+        st.error(f"Could not reach ClickUp: {e}")
+        st.stop()
+
+    try:
+        data = response.json()
+    except ValueError:
+        st.error(f"ClickUp returned an unexpected response (HTTP {response.status_code}).")
+        st.stop()
+
+    if response.status_code == 200:
+        return data
+
+    if response.status_code in (401, 403):
+        if data.get('ECODE', '').startswith('OAUTH'):
+            st.error(f"ClickUp rejected the API key ({data.get('err')}, {data.get('ECODE')}). "
+                     "The token is invalid or revoked - generate a new one and update the app secrets.")
+        else:
+            st.error(f"ClickUp denied access ({data.get('err')}, {data.get('ECODE')}). "
+                     "The token works but its owner lacks permission - use a token from a "
+                     "Workspace Owner/Admin.")
+    elif response.status_code == 429:
+        st.error("ClickUp rate limit reached. Please wait a minute and try again.")
+    else:
+        st.error(f"ClickUp error (HTTP {response.status_code}): {data}")
+    st.stop()
+
 def memberInfo():
-    url = "https://api.clickup.com/api/v2/team"
-    headers = {"Authorization": __auth__}
-    response = requests.get(url, headers=headers)
-    data = response.json()
+    data = clickup_get("https://api.clickup.com/api/v2/team")
 
-    # Extract member id and username
+    # Map last 4 characters of username (= Employee ID) -> ClickUp user id
     members_dict = {}
-    for team in data['teams']:
-        for member in team['members']:
-            member_id = member['user']['id']
-            member_username = member['user']['username']
-            members_dict[member_id] = member_username
+    for team in data.get('teams', []):
+        if str(team.get('id')) != str(team_id):
+            continue
+        for member in team.get('members', []):
+            user = member.get('user', {})
+            username = user.get('username')
+            if username:
+                members_dict[username[-4:].upper()] = user['id']
 
-    # Exchange keys and values - keep last 4 digits corresponding to emp ID
-    members_dict = {value[-4:]: key for key, value in members_dict.items() if value is not None}
+    if not members_dict:
+        st.error(f"The API token has no access to ClickUp team {team_id}, or the team has no members.")
+        st.stop()
 
     return members_dict
 
 def get_employee_name(employee_id):
-    """Get employee name from member info"""
-    members_dict = memberInfo()
-    # This is a simplified version - you might need to enhance this
-    # to get actual employee names from your system
+    """Placeholder: returns a label built from the Employee ID."""
     return f"Employee_{employee_id}"
+
+def dropdown_label(custom_field):
+    """Return the option name for a dropdown custom field value (matched by orderindex)."""
+    value = custom_field['value']
+    options = custom_field.get('type_config', {}).get('options', [])
+    for option in options:
+        if option.get('orderindex') == value or option.get('id') == value:
+            return option.get('name')
+    if isinstance(value, int) and 0 <= value < len(options):
+        return options[value].get('name')
+    return None
 
 def get_monthly_data(employee_key, month, year):
     """Get monthly timesheet data for an employee"""
@@ -109,15 +148,13 @@ def get_monthly_data(employee_key, month, year):
         "assignee": employee_key,
     }
 
-    headers = {"Content-Type": "application/json", "Authorization": __auth__}
-    response = requests.get(url, headers=headers, params=query)
-    data = response.json()
+    data = clickup_get(url, params=query)
 
     if 'data' not in data or not data['data']:
         return 0
 
-    # Calculate total hours for the month
-    total_milliseconds = sum(int(entry['duration']) for entry in data['data'])
+    # Calculate total hours for the month (skip running timers, which have negative duration)
+    total_milliseconds = sum(int(entry['duration']) for entry in data['data'] if int(entry['duration']) > 0)
     total_hours = total_milliseconds / 3600000  # Convert to hours
     
     return total_hours
@@ -164,27 +201,42 @@ def get_selected_dates(start_date, end_date, key, open_google_sheet, to_email, c
         "assignee": employee_key,
     }
 
-    headers = {"Content-Type": "application/json", "Authorization": __auth__}
-    response = requests.get(url, headers=headers, params=query)
-    data = response.json()
+    data = clickup_get(url, params=query)
 
-    if 'data' not in data or not data['data']:
+    entries, skipped = [], []
+    for e in data.get('data', []):
+        duration = int(e.get('duration') or 0)
+        if duration <= 0:          # running timer
+            continue
+        task = e.get('task')
+        if isinstance(task, dict) and task.get('id'):
+            entries.append(e)
+        else:
+            skipped.append(e)
+
+    if skipped:
+        hrs = sum(int(e['duration']) for e in skipped) / 3600000
+        sample = skipped[0].get('task')
+        st.warning(f"{len(skipped)} time entries ({hrs:.2f} h) are not linked to any task "
+                   f"and were skipped. (Example task value: {type(sample).__name__} "
+                   f"{str(sample)[:80]!r})")
+
+    if not entries:
         st.error("No entries found in this date range. Please update entries in ClickUp.")
         return
 
-    # Extract task data efficiently
     task_data = [
         {
-            "Task Name": entry.get('task', {}).get('name', '0'),
-            "Task ID": entry.get('task', {}).get('id', '0'),
-            "Task Status": entry.get('task', {}).get('status', {}).get('status', '0'),
+            "Task Name": entry['task'].get('name', '0'),
+            "Task ID": entry['task']['id'],
+            "Task Status": (entry['task'].get('status') or {}).get('status', '0'),
             "Duration": int(entry['duration']),
             "Date": pd.Timestamp(int(entry['start']) // 1000, unit='s').date(),
-            "Day": pytz.utc.localize(datetime.utcfromtimestamp(int(entry['start']) // 1000))
+            "Day": datetime.fromtimestamp(int(entry['start']) // 1000, tz=timezone.utc)
             .astimezone(ist_timezone)
             .strftime('%A'),
         }
-        for entry in data['data']
+        for entry in entries
     ]
 
     df = pd.DataFrame(task_data)
@@ -199,37 +251,34 @@ def get_selected_dates(start_date, end_date, key, open_google_sheet, to_email, c
     df = df.merge(df_pivot, on='Task ID', how='left')
     
     ### OTHER Checks ###
-    # define the API parameters
-    headers = {"Authorization": __auth__}
-
     # iterate over the unique task IDs in the dataframe
     for task_id in df['Task ID'].unique():
-        # construct the API URL for the task ID
-        url = f"https://api.clickup.com/api/v2/task/{task_id}"
+        # fetch task details (stops with a clear message if ClickUp refuses)
+        tasks = clickup_get(f"https://api.clickup.com/api/v2/task/{task_id}")
 
-        # make the API request and parse the JSON response
-        response = requests.get(url, headers=headers)
-        tasks = response.json()
-
-        hrs_mins = convert_milliseconds_to_hours_minutes(tasks.get('time_spent', 0))
+        hrs_mins = convert_milliseconds_to_hours_minutes(int(tasks.get('time_spent') or 0))
         df.loc[df['Task ID'] == task_id,
                  'Total (till date)'] = f"{hrs_mins[0]}h {hrs_mins[1]}m"
         # If there is no Custom field just continue
         try:
             for custom_field in tasks.get("custom_fields", []):
                 # Process custom field logic
-                if 'value' in custom_field and custom_field['type'] == 'drop_down':
-                    df.loc[df['Task ID'] == task_id, custom_field['name']] = custom_field['type_config']['options'][custom_field['value']]['name']
+                if custom_field.get('value') is not None and custom_field.get('type') == 'drop_down':
+                    label = dropdown_label(custom_field)
+                    if label is not None:
+                        df.loc[df['Task ID'] == task_id, custom_field['name']] = label
         except Exception as e:
             error_message = f"Error processing custom fields for task {task_id}: {e}"
             st.error(error_message)
             # Dump the response JSON nicely for debugging
             st.write("Task response:", json.dumps(tasks, indent=2))
 
-    # Check if 'Proj-Common-Activity' column exists in the DataFrame
-    if 'Proj-Common-Activity' in df.columns:
-        # Filter out rows where 'Proj-Common-Activity' is 'Vyoma Holiday' or 'Personal Leave'
-        df = df[(df['Common Activities'] != 'Vyoma Holiday') & (df['Common Activities'] != 'Personal Leave')]
+    # Filter out holiday / leave rows (column name must match the one being filtered)
+    if 'Common Activities' in df.columns:
+        df = df[~df['Common Activities'].isin(['Vyoma Holiday', 'Personal Leave'])]
+        if df.empty:
+            st.error("Only holiday / leave entries were found in this date range.")
+            return
 
     # Check if 'Goal Type' column exists
     if 'Goal Type' not in df.columns:
@@ -428,7 +477,7 @@ def main():
         image_data = response.content
         image = Image.open(BytesIO(image_data))
         image = image.resize((167, 81))
-        st.image(image, use_container_width=False)
+        st.image(image, width="content")
 
     # Display Title in the second column (centered)
     with col2:
@@ -539,7 +588,7 @@ def main():
             image_data = response.content
             image = Image.open(BytesIO(image_data))
             image = image.resize((100, 49))  # Smaller size for table header
-            st.image(image, use_container_width=False)
+            st.image(image, width="content")
         
         # Display the timesheet as a table   
         # cell‐wise formatter
@@ -596,4 +645,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
