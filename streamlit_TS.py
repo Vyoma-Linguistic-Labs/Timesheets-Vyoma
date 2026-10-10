@@ -22,7 +22,7 @@ import urllib.parse
 import json
 import calendar
 
-api_key = st.secrets.get("clickup_api_key", "pk_PASTE_TOKEN_HERE")
+api_key = st.secrets.get("clickup_api_key", "pk_101074744_3X4G0LKPKB802P68ECU9NGQZ0CUB9IJD")
 team_id = st.secrets.get("team_id", "3314662")
 
 __version__ = "v4.0.3"
