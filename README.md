@@ -27,3 +27,14 @@ A Streamlit-based application that allows users to generate timesheets by select
 
 ## Version
 v4.0.0 (1st may 2025)
+
+## Streamlit configuration
+
+Run `streamlit run streamlit_TS.py`. For local use, create `.streamlit/secrets.toml` (excluded from Git):
+
+```toml
+clickup_api_key = "YOUR_CLICKUP_TOKEN"
+team_id = "3314662"
+```
+
+For Streamlit Community Cloud, enter the same settings under Settings → Secrets. Use a Workspace Owner/Admin token with access to the required Spaces and tasks for employee-wide reporting. Tokens must not be committed to GitHub.

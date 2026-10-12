@@ -14,6 +14,7 @@ import pandas as pd
 from datetime import datetime, timezone, timedelta
 import requests
 import time
+import os
 import numpy as np
 import pytz
 from PIL import Image
@@ -21,13 +22,48 @@ from io import BytesIO
 import urllib.parse
 import json
 import calendar
+from streamlit.errors import StreamlitSecretNotFoundError
 
-api_key = st.secrets.get("clickup_api_key", "pk_101074744_3X4G0LKPKB802P68ECU9NGQZ0CUB9IJD")
-team_id = st.secrets.get("team_id", "3314662")
+
+def get_secret_or_env(secret_name, env_name, default=""):
+    """Read from Streamlit secrets when available, otherwise fall back to env vars."""
+    try:
+        return st.secrets[secret_name]
+    except (KeyError, StreamlitSecretNotFoundError):
+        return os.getenv(env_name, default)
+
+
+# Read ClickUp config from Streamlit secrets first, then environment variables.
+# Avoid using the reserved `auth` key name in secrets.toml.
+api_key = get_secret_or_env("clickup_api_key", "CLICKUP_API_KEY")
+team_id = get_secret_or_env("team_id", "CLICKUP_TEAM_ID")
 
 __version__ = "v4.0.3"
 __date__ = "2nd December 2025"
 __auth__ = api_key
+
+
+def validate_clickup_config():
+    """Ensure local config is present before making ClickUp API calls."""
+    missing = []
+    if not api_key:
+        missing.append("`clickup_api_key`")
+    if not team_id:
+        missing.append("`team_id`")
+
+    if missing:
+        st.error(
+            "Missing ClickUp configuration: "
+            + ", ".join(missing)
+            + ". Add them to `.streamlit/secrets.toml` or set the matching environment variables."
+        )
+        st.info(
+            "Example `.streamlit/secrets.toml`:\n\n"
+            'clickup_api_key = "your_clickup_api_key"\n'
+            'team_id = "3314662"'
+        )
+        return False
+    return True
 
 # Dictionary mapping month names to numbers
 month_dict = {
@@ -65,74 +101,66 @@ def convert_milliseconds_to_hours_minutes(milliseconds):
     return (int(hours), int(minutes))
 
 def clickup_get(url, params=None):
-    """Call the ClickUp API and stop the app with a clear message if it fails."""
-    headers = {"Content-Type": "application/json", "Authorization": __auth__}
+    """Validate API responses before using member, time-entry, or task data."""
     try:
-        response = requests.get(url, headers=headers, params=params, timeout=30)
-    except requests.RequestException as e:
-        st.error(f"Could not reach ClickUp: {e}")
-        st.stop()
-
-    try:
+        response = requests.get(url, headers={"Authorization": __auth__}, params=params, timeout=30)
         data = response.json()
-    except ValueError:
-        st.error(f"ClickUp returned an unexpected response (HTTP {response.status_code}).")
+    except (requests.RequestException, ValueError):
+        st.error("Could not retrieve a valid response from ClickUp. Please retry.")
         st.stop()
-
-    if response.status_code == 200:
-        return data
-
-    if response.status_code in (401, 403):
-        if data.get('ECODE', '').startswith('OAUTH'):
-            st.error(f"ClickUp rejected the API key ({data.get('err')}, {data.get('ECODE')}). "
-                     "The token is invalid or revoked - generate a new one and update the app secrets.")
+    if not isinstance(data, dict):
+        st.error("ClickUp returned an unexpected response format.")
+        st.stop()
+    code = str(data.get("ECODE", ""))
+    if response.status_code != 200:
+        if code.startswith("OAUTH"):
+            st.error(f"ClickUp rejected the configured API token (HTTP {response.status_code}, {code}). "
+                     "Replace clickup_api_key in .streamlit/secrets.toml or the deployed app's Secrets.")
+        elif code == "ACCESS_080":
+            st.error("The token owner cannot access this task's Space (ACCESS_080). "
+                     "Use a token whose owner can open every relevant Space and task.")
         else:
-            st.error(f"ClickUp denied access ({data.get('err')}, {data.get('ECODE')}). "
-                     "The token works but its owner lacks permission - use a token from a "
-                     "Workspace Owner/Admin.")
-    elif response.status_code == 429:
-        st.error("ClickUp rate limit reached. Please wait a minute and try again.")
-    else:
-        st.error(f"ClickUp error (HTTP {response.status_code}): {data}")
-    st.stop()
+            st.error(f"ClickUp request failed (HTTP {response.status_code}, code {code or 'unavailable'}).")
+        st.stop()
+    return data
+
 
 def memberInfo():
-    data = clickup_get("https://api.clickup.com/api/v2/team")
+    if not validate_clickup_config():
+        return {}
 
-    # Map last 4 characters of username (= Employee ID) -> ClickUp user id
+    url = "https://api.clickup.com/api/v2/team"
+    headers = {"Authorization": __auth__}
+    data = clickup_get(url)
+
+    # Extract member id and username
     members_dict = {}
-    for team in data.get('teams', []):
-        if str(team.get('id')) != str(team_id):
-            continue
-        for member in team.get('members', []):
-            user = member.get('user', {})
-            username = user.get('username')
-            if username:
-                members_dict[username[-4:].upper()] = user['id']
-
-    if not members_dict:
-        st.error(f"The API token has no access to ClickUp team {team_id}, or the team has no members.")
+    if not isinstance(data.get('teams'), list):
+        st.error("ClickUp returned no workspace list. Please check token access.")
         st.stop()
+    for team in data['teams']:
+        for member in team['members']:
+            member_id = member['user']['id']
+            member_username = member['user']['username']
+            members_dict[member_id] = member_username
+
+    # Exchange keys and values - keep last 4 digits corresponding to emp ID
+    members_dict = {value[-4:]: key for key, value in members_dict.items() if value is not None}
 
     return members_dict
 
 def get_employee_name(employee_id):
-    """Placeholder: returns a label built from the Employee ID."""
+    """Get employee name from member info"""
+    members_dict = memberInfo()
+    # This is a simplified version - you might need to enhance this
+    # to get actual employee names from your system
     return f"Employee_{employee_id}"
-
-def dropdown_label(custom_field):
-    """Return the option name for a dropdown custom field value (matched by orderindex)."""
-    value = custom_field['value']
-    options = custom_field.get('type_config', {}).get('options', [])
-    for option in options:
-        if option.get('orderindex') == value or option.get('id') == value:
-            return option.get('name')
-    if isinstance(value, int) and 0 <= value < len(options):
-        return options[value].get('name')
-    return None
 
 def get_monthly_data(employee_key, month, year):
     """Get monthly timesheet data for an employee"""
+    if not validate_clickup_config():
+        return 0
+
     # Get first and last day of the month
     first_day = datetime(year, month, 1)
     last_day = datetime(year, month, calendar.monthrange(year, month)[1])
@@ -148,19 +176,23 @@ def get_monthly_data(employee_key, month, year):
         "assignee": employee_key,
     }
 
+    headers = {"Content-Type": "application/json", "Authorization": __auth__}
     data = clickup_get(url, params=query)
 
     if 'data' not in data or not data['data']:
         return 0
 
-    # Calculate total hours for the month (skip running timers, which have negative duration)
-    total_milliseconds = sum(int(entry['duration']) for entry in data['data'] if int(entry['duration']) > 0)
+    # Calculate total hours for the month
+    total_milliseconds = sum(int(entry['duration']) for entry in data['data'])
     total_hours = total_milliseconds / 3600000  # Convert to hours
     
     return total_hours
 
 # Optimized `get_selected_dates` function
 def get_selected_dates(start_date, end_date, key, open_google_sheet, to_email, cc_email, ts_tracker_link, show_monthly_total=False, selected_month=None, selected_year=None):
+    if not validate_clickup_config():
+        return
+
     if not key:
         st.error("Please enter your Employee ID.")
         return
@@ -201,38 +233,38 @@ def get_selected_dates(start_date, end_date, key, open_google_sheet, to_email, c
         "assignee": employee_key,
     }
 
+    headers = {"Content-Type": "application/json", "Authorization": __auth__}
     data = clickup_get(url, params=query)
 
-    entries, skipped = [], []
-    for e in data.get('data', []):
-        duration = int(e.get('duration') or 0)
-        if duration <= 0:          # running timer
-            continue
-        task = e.get('task')
-        if isinstance(task, dict) and task.get('id'):
-            entries.append(e)
-        else:
-            skipped.append(e)
-
-    if skipped:
-        hrs = sum(int(e['duration']) for e in skipped) / 3600000
-        sample = skipped[0].get('task')
-        st.warning(f"{len(skipped)} time entries ({hrs:.2f} h) are not linked to any task "
-                   f"and were skipped. (Example task value: {type(sample).__name__} "
-                   f"{str(sample)[:80]!r})")
-
-    if not entries:
+    if 'data' not in data or not data['data']:
         st.error("No entries found in this date range. Please update entries in ClickUp.")
         return
 
+    from time_entry_resolution import resolve_time_entries, UnresolvedTaskError
+    try:
+        entries, recovered = resolve_time_entries(
+            data['data'],
+            lambda entry_id: clickup_get(
+                f"https://api.clickup.com/api/v2/team/{team_id}/time_entries/{entry_id}"),
+        )
+    except UnresolvedTaskError as exc:
+        st.error(str(exc))
+        return
+    if not entries:
+        st.error("No completed time entries were found for this date range.")
+        return
+    if recovered:
+        st.info(f"Recovered task information for {recovered} time entries.")
+
+    # Extract task data efficiently
     task_data = [
         {
-            "Task Name": entry['task'].get('name', '0'),
-            "Task ID": entry['task']['id'],
-            "Task Status": (entry['task'].get('status') or {}).get('status', '0'),
+            "Task Name": entry.get('task', {}).get('name', '0'),
+            "Task ID": entry.get('task', {}).get('id', '0'),
+            "Task Status": entry.get('task', {}).get('status', {}).get('status', '0'),
             "Duration": int(entry['duration']),
             "Date": pd.Timestamp(int(entry['start']) // 1000, unit='s').date(),
-            "Day": datetime.fromtimestamp(int(entry['start']) // 1000, tz=timezone.utc)
+            "Day": pytz.utc.localize(datetime.utcfromtimestamp(int(entry['start']) // 1000))
             .astimezone(ist_timezone)
             .strftime('%A'),
         }
@@ -245,40 +277,42 @@ def get_selected_dates(start_date, end_date, key, open_google_sheet, to_email, c
     days_of_week = ['Saturday', 'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
     df_pivot = df.pivot_table(index='Task ID', columns='Day', values='Duration', aggfunc='sum', fill_value=0)
     df_pivot = df_pivot.reindex(columns=days_of_week, fill_value=0)
-    df_pivot = df_pivot.div(3600000).round(2)  # Convert milliseconds to hours
+    df_pivot = df_pivot.div(3600000)  # Convert milliseconds to hours
 
     df = df.drop(['Duration', 'Date', 'Day'], axis=1).drop_duplicates(subset='Task ID')
     df = df.merge(df_pivot, on='Task ID', how='left')
     
     ### OTHER Checks ###
+    # define the API parameters
+    headers = {"Authorization": __auth__}
+
     # iterate over the unique task IDs in the dataframe
     for task_id in df['Task ID'].unique():
-        # fetch task details (stops with a clear message if ClickUp refuses)
-        tasks = clickup_get(f"https://api.clickup.com/api/v2/task/{task_id}")
+        # construct the API URL for the task ID
+        url = f"https://api.clickup.com/api/v2/task/{task_id}"
 
-        hrs_mins = convert_milliseconds_to_hours_minutes(int(tasks.get('time_spent') or 0))
+        # make the API request and parse the JSON response
+        tasks = clickup_get(url)
+
+        hrs_mins = convert_milliseconds_to_hours_minutes(tasks.get('time_spent', 0))
         df.loc[df['Task ID'] == task_id,
                  'Total (till date)'] = f"{hrs_mins[0]}h {hrs_mins[1]}m"
         # If there is no Custom field just continue
         try:
             for custom_field in tasks.get("custom_fields", []):
                 # Process custom field logic
-                if custom_field.get('value') is not None and custom_field.get('type') == 'drop_down':
-                    label = dropdown_label(custom_field)
-                    if label is not None:
-                        df.loc[df['Task ID'] == task_id, custom_field['name']] = label
+                if 'value' in custom_field and custom_field['type'] == 'drop_down':
+                    df.loc[df['Task ID'] == task_id, custom_field['name']] = custom_field['type_config']['options'][custom_field['value']]['name']
         except Exception as e:
             error_message = f"Error processing custom fields for task {task_id}: {e}"
             st.error(error_message)
             # Dump the response JSON nicely for debugging
             st.write("Task response:", json.dumps(tasks, indent=2))
 
-    # Filter out holiday / leave rows (column name must match the one being filtered)
-    if 'Common Activities' in df.columns:
-        df = df[~df['Common Activities'].isin(['Vyoma Holiday', 'Personal Leave'])]
-        if df.empty:
-            st.error("Only holiday / leave entries were found in this date range.")
-            return
+    # Check if 'Proj-Common-Activity' column exists in the DataFrame
+    if 'Proj-Common-Activity' in df.columns:
+        # Filter out rows where 'Proj-Common-Activity' is 'Vyoma Holiday' or 'Personal Leave'
+        df = df[(df['Common Activities'] != 'Vyoma Holiday') & (df['Common Activities'] != 'Personal Leave')]
 
     # Check if 'Goal Type' column exists
     if 'Goal Type' not in df.columns:
@@ -645,3 +679,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
