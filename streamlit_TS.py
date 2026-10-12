@@ -38,8 +38,8 @@ def get_secret_or_env(secret_name, env_name, default=""):
 api_key = get_secret_or_env("clickup_api_key", "CLICKUP_API_KEY")
 team_id = get_secret_or_env("team_id", "CLICKUP_TEAM_ID")
 
-__version__ = "v4.0.3"
-__date__ = "2nd December 2025"
+__version__ = "v4.0.4"
+__date__ = "12th October 2026"
 __auth__ = api_key
 
 
